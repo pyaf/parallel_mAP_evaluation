@@ -49,7 +49,9 @@ gt = [{
 I've given a sample `pred_file` and `gt_file` in the `tmp` folder of this repository.
 Here's how you can run the evaluation script:
 
-`python mAP_evaluation.py --gt_file="tmp/gt_data.json" --pred_file="tmp/pred_data.json" --output_dir="tmp/"`
+```
+python mAP_evaluation.py --gt_file="tmp/gt_data.json" --pred_file="tmp/pred_data.json" --output_dir="tmp/"
+```
 
 
 After this command finishes, you'll find metric_summary.json file in tmp containing the mAPs of all the iou thresholds as well as the overall mAP.
