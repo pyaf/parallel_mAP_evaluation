@@ -14,6 +14,14 @@ In this repo, you can find the parallelized implementation of mAP evaluation (`m
 
 The parallel implementation is ~10x faster than the for loop implementation.
 
+
+## Requirements
+
+* lyft's devkit sdk [link](https://github.com/lyft/nuscenes-devkit/)
+* fire
+* pathlib
+* numpy
+
 ## Instructions
 
 As official mAP_evaluation script, this script also expects the predictions and ground truth to be in the format:
