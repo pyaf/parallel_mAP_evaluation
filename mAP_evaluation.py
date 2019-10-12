@@ -14,7 +14,6 @@ predictions = [{
     'score': 0.3077029437237213
 }]
 
-
 `gt_file`: ground truth annotations in global frame, in the format of:
 
 
@@ -39,44 +38,50 @@ from multiprocessing import Process
 from lyft_dataset_sdk.eval.detection.mAP_evaluation import get_average_precisions
 
 
-def save_ap(gt, predictions, class_names, iou_threshold, output_dir):
-    ''' computes average precisions (ap) for a given threshold, and saves the metrics in a temp file '''
-    ap = get_average_precisions(gt, predictions, class_names, iou_threshold)
-    metric = {c:ap[idx] for idx, c in enumerate(class_names)}
+def save_AP(gt, predictions, class_names, iou_threshold, output_dir):
+    ''' computes average precisions (AP) for a given threshold, and saves the metrics in a temp file '''
+    # use lyft's provided function to compute AP
+    AP = get_average_precisions(gt, predictions, class_names, iou_threshold)
+    # create a dict with keys as class names and values as their respective APs
+    metric = {c:AP[idx] for idx, c in enumerate(class_names)}
+
+    # save the dict in a temp file
     summary_path = output_dir / f'metric_summary_{iou_threshold}.json'
     with open(str(summary_path), 'w') as f:
         json.dump(metric, f)
 
 
-def get_metric_overall_ap(iou_th_range, output_dir, class_names):
-    ''' reads temp files and calculates overall metrics, returns:
-    `metric`: a dict with key as iou thresholds and value as dicts of class and their respective APs,
-    `overall_ap`: overall ap of each class
+def get_metric_overall_AP(iou_th_range, output_dir, class_names):
+    ''' reads temp files and calculates overall per class APs.
+
+    returns:
+        `metric`: a dict with key as iou thresholds and value as dicts of class and their respective APs,
+        `overall_AP`: overall AP of each class
     '''
 
     metric = {}
-    overall_ap = np.zeros(len(class_names))
+    overall_AP = np.zeros(len(class_names))
     for iou_threshold in iou_th_range:
         summary_path = output_dir / f'metric_summary_{iou_threshold}.json'
-        #import pdb; pdb.set_trace()
         with open(str(summary_path), 'r') as f:
             data = json.load(f) # type(data): dict
             metric[iou_threshold] = data
-            overall_ap += np.array([data[c] for c in class_names])
-        summary_path.unlink() # delete this file
-    overall_ap /= len(iou_th_range)
-    return metric, overall_ap
+            overall_AP += np.array([data[c] for c in class_names])
+        summary_path.unlink() # delete this temp file
+    overall_AP /= len(iou_th_range)
+    return metric, overall_AP
 
 
 def main(gt_file, pred_file, output_dir):
     '''
-    Main function to compute mAP
+    Main function to compute mAP, metrics are saved in `metric_summary.json` file
 
     args:
     gt_file: json file path with ground truth annotations
     pred_file: json file path with predicted annotations
     output_dir: the final computed metrics are saved in this directory as a json file
     '''
+    print('Starting mAP computation')
 
     gt_path = Path(gt_file)
     pred_path = Path(pred_file)
@@ -89,7 +94,6 @@ def main(gt_file, pred_file, output_dir):
     with open(str(gt_path)) as f:
         gt = json.load(f)
 
-
     class_names = ['animal', 'bicycle', 'bus', 'car', 'emergency_vehicle',
                     'motorcycle', 'other_vehicle', 'pedestrian', 'truck']
 
@@ -100,7 +104,7 @@ def main(gt_file, pred_file, output_dir):
     # create and start parallel processes
     processes = []
     for iou_threshold in iou_th_range:
-        process = Process(target=save_ap, args=(gt, predictions, class_names, iou_threshold, output_dir))
+        process = Process(target=save_AP, args=(gt, predictions, class_names, iou_threshold, output_dir))
         process.start()
         processes.append(process)
 
@@ -108,26 +112,16 @@ def main(gt_file, pred_file, output_dir):
         process.join()
 
     # get overall metrics
-    metric, overall_ap = get_metric_overall_ap(iou_th_range, output_dir, class_names)
-
-    mAP = np.mean(overall_ap)
-    #overall_ap_dict = {c: overall_ap[idx] for idx, c in enumerate(class_names)}
-    #metric['overall'] = {c:overall_ap_dict[c] for c in sorted(class_names)}
-    metric['overall'] = {c: overall_ap[idx] for idx, c in enumerate(class_names)}
-    metric['mAP'] = mAP
+    metric, overall_AP = get_metric_overall_AP(iou_th_range, output_dir, class_names)
+    metric['overall'] = {c: overall_AP[idx] for idx, c in enumerate(class_names)}
+    metric['mAP'] = np.mean(overall_AP)
 
     summary_path = Path(output_dir) / 'metric_summary.json'
     with open(str(summary_path), 'w') as f:
         json.dump(metric, f, indent=4)
 
+    print(f'Done!, Final metrics saved at {str(summary_path)}')
 
 if __name__ == "__main__":
     fire.Fire(main)
 
-
-'''
-example command
-
-python mAP_evaluation.py --gt_file="tmp/gt_data.json" --pred_file="tmp/pred_data.json" --output_dir="tmp/"
-
-'''
